@@ -1,0 +1,190 @@
+#!/usr/bin/env python
+
+from optparse import OptionParser
+from os import environ
+
+from swiftly.client import Client
+from eventlet.greenpool import GreenPool
+from eventlet import sleep
+import eventlet
+eventlet.monkey_patch()
+
+
+obj_allowed_headers = '''Content-Encoding, Content-Disposition, X-Object-Manifest, Access-Control-Allow-Origin, Access-Control-Allow-Credentials, Access-Control-Expose-Headers, Access-Control-Max-Age, Access-Control-Allow-Methods, Access-Control-Allow-Headers, Origin, Access-Control-Request-Method, Access-Control-Request-Headers, X-Delete-At, X-Static-Large-Object, P3P'''.split()
+
+obj_allowed_headers = [i.lower().strip() for i in obj_allowed_headers]
+
+if __name__ == '__main__':
+    parser = OptionParser()
+
+    parser.add_option(
+        '-A', '--auth-url', dest='auth_url',
+        default=environ.get('SWIFTLY_AUTH_URL', ''), metavar='URL',
+        help='URL to auth system, example: '
+             'http://127.0.0.1:8080/auth/v1.0 You can also set this with '
+             'the environment variable SWIFTLY_AUTH_URL.')
+    parser.add_option(
+        '-U', '--auth-user', dest='auth_user',
+        default=environ.get('SWIFTLY_AUTH_USER', ''), metavar='USER',
+        help='User name for auth system, example: test:tester You can '
+             'also set this with the environment variable '
+             'SWIFTLY_AUTH_USER.')
+    parser.add_option(
+        '-K', '--auth-key', dest='auth_key',
+        default=environ.get('SWIFTLY_AUTH_KEY', ''), metavar='KEY',
+        help='Key for auth system, example: testing You can also set this '
+             'with the environment variable SWIFTLY_AUTH_KEY.')
+
+    parser.add_option(
+        '--from-region', dest='from_region', metavar='VALUE',
+        help='Region to transfer the files from.')
+
+    parser.add_option(
+        '--to-region', dest='to_region', metavar='VALUE',
+        help='Region to transfer the files to.')
+
+    parser.add_option(
+        '--verbose-log', dest='verbose_log',
+        help='The path to the verbose log to parse.')
+
+    options, args = parser.parse_args()
+    from_client = Client(auth_url=options.auth_url,
+                         auth_user=options.auth_user,
+                         auth_key=options.auth_key,
+                         region=options.from_region,
+                         retries=9, eventlet=True)
+    print 'lalala: %s' % (from_client.get_account(),)
+
+    to_client = Client(auth_url=options.auth_url,
+                       auth_user=options.auth_user,
+                       auth_key=options.auth_key,
+                       region=options.to_region,
+                       retries=6, eventlet=True)
+
+    pool = GreenPool(1)
+    container_errors = {}
+    obj_errors = {}
+    containers = []
+    obj_manifests = []
+
+    def container_errors_append(thing):
+        container_errors.append(thing)
+        if len(container_errors) > 100:
+            raise Exception('Giving up from cont errors')
+
+    def obj_errors_append(thing):
+        obj_errors.append(thing)
+        if len(obj_errors) > 10000:
+            raise Exception('Giving up from obj errors')
+
+    def get_all_containers():
+        marker = None
+        while True:
+            some_left = False
+            status, reason, headers, contents = \
+                from_client.get_account(marker=marker)
+            if status // 100 != 2:
+                raise Exception('Could not get Account: %s' % marker)
+            for cont_dict in contents:
+                some_left = True
+                marker = cont_dict['name']
+                yield cont_dict['name']
+            if not some_left:
+                break
+
+    def get_all_objects(container):
+        marker = None
+        while True:
+            some_left = False
+            status, reason, headers, contents = \
+                from_client.get_container(container, marker=marker)
+            if status // 100 != 2:
+                print 'ERROR CONT GETing %s' % container
+                container_errors_append(
+                    {'type': 'get_container', 'name': container})
+                continue
+                sleep(10)
+            for obj_dict in contents:
+                some_left = True
+                marker = obj_dict['name']
+                yield obj_dict['name']
+            if not some_left:
+                break
+
+    def put_container(container):
+        status, reason, headers, contents = \
+            from_client.head_container(container)
+        if status // 100 != 2:
+            container_errors_append(
+                {'type': 'head_container', 'name': container})
+            print 'ERROR CONT HEADing %s' % container
+            return
+
+        put_headers = {}
+        for hkey, hval in headers.iteritems():
+            if hkey.lower().startswith('x-container-meta'):
+                put_headers[hkey] = hval
+        status, reason, headers, contents = \
+            to_client.put_container(container, headers=put_headers)
+        if status // 100 != 2:
+            container_errors_append(
+                {'type': 'put_container', 'name': container})
+            print 'ERROR CONT PUTing %s' % container
+            return
+        else:
+            print 'CONT PUT: %s' % container
+            containers.append(container)
+
+    # figure out the concurrency gets later
+    all_containers = list(get_all_containers())
+    for container in all_containers:
+        pool.spawn_n(put_container, container)
+
+    pool.waitall()
+
+    def put_object(container, obj, skip_los=True):
+        fstatus, freason, fheaders, fcontents = \
+            from_client.get_object(
+                container, obj, query={'multipart-manifest': 'get'})
+        if fstatus // 100 != 2:
+            obj_errors_append({'type': 'get_obj',
+                               'name': '%s/%s' % (container, obj)})
+            print 'ERROR GETing %s/%s' % (container, obj)
+            return
+        if skip_los and ('x-object-manifest' in fheaders or \
+                         'x-static-large-object' in fheaders):
+            # do these at the end in case its a slo and segments need to
+            # be there first
+            obj_manifests.append((container, obj))
+            return
+        put_headers = {}
+
+        for hkey, hval in fheaders.iteritems():
+            if hkey.lower().startswith('x-object-meta') or \
+                    hkey in obj_allowed_headers:
+                put_headers[hkey] = hval
+
+        pstatus, preason, pheaders, pcontents = \
+            to_client.put_object(
+                container, obj, contents=fcontents, headers=put_headers)
+
+        if pstatus // 100 != 2:
+            obj_errors_append({'type': 'put_obj',
+                               'name': '%s/%s' % (container, obj)})
+            print 'ERROR OBJ PUTing %s/%s' % (container, obj)
+            return
+        else:
+            print 'OBJ PUT: %s/%s' % (container, obj)
+
+    for container in containers:
+        # figure out the concurrency gets later
+        all_objs = list(get_all_objects(container))
+        for obj in all_objs:
+            pool.spawn_n(put_object, container, obj)
+
+    pool.waitall()
+
+    for container, obj in obj_manifests:
+        pool.spawn_n(put_object, container, obj, False)
+
+    pool.waitall()
