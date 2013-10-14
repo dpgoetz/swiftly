@@ -169,7 +169,7 @@ if __name__ == '__main__':
 
     all_containers = []
     if objs_from_file:
-        all_containers = [i.split('/', 1)[0] for i in objs_from_file]
+        all_containers = [i[0] for i in objs_from_file]
     else:
         # figure out the concurrency gets later
         all_containers = list(get_all_containers(from_queue))
