@@ -265,7 +265,8 @@ if __name__ == '__main__':
 
         sleep(2**i)
         cur_failed_objs = list(failure_objs)
-        failure_objs = []
+        for i in xrange(len(failure_objs)):
+            failure_objs.pop()
 
         for container, obj in cur_failed_objs:
             pool.spawn_n(put_object, container, obj, False)
