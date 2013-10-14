@@ -156,7 +156,7 @@ if __name__ == '__main__':
         from_objs = set(get_all_objects(container, from_queue))
         to_objs = set(get_all_objects(container, to_queue))
         for obj_tup in (from_objs - to_objs):
-            fail_file.write('%s/%s\n' % (quote(container), quote(obj_tup[0]))
+            fail_file.write('%s/%s\n' % (quote(container), quote(obj_tup[0])))
 
     fail_file.close()
 
