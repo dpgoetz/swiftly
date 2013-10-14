@@ -124,6 +124,8 @@ if __name__ == '__main__':
             from_queue.put(from_client)
 
     def put_container(container):
+        if isinstance(container, unicode):
+            container = container.encode('utf-8')
         from_client = from_queue.get()
         to_client = to_queue.get()
         try:
@@ -163,6 +165,10 @@ if __name__ == '__main__':
     failure_objs = []
 
     def put_object(container, obj, skip_los=True):
+        if isinstance(container, unicode):
+            container = container.encode('utf-8')
+        if isinstance(obj, unicode):
+            obj = obj.encode('utf-8')
         from_client = from_queue.get()
         to_client = to_queue.get()
         try:
