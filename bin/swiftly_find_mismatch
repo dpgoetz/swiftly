@@ -118,36 +118,36 @@ if __name__ == '__main__':
 
     fail_file = open(options.output, 'w')
 
-    def check_object(container, obj_dict)
-        if isinstance(container, unicode):
-            container = container.encode('utf-8')
-        if isinstance(obj, unicode):
-            obj = obj.encode('utf-8')
-        to_client = to_queue.get()
-        try:
-            try:
-                status, reason, headers, contents = \
-                    to_client.head_object(
-                        container, obj, query={'multipart-manifest': 'get'})
-            except Exception as err:
-                print 'ERROR GETing %s/%s' % (container, obj)
-                from_client.reset()
-                return
-            if status // 100 != 2:
-                print 'ERROR GETing %s/%s' % (container, obj)
-                return
-            if headers['Etag'] != obj_dict['hash'] or \
-                    headers['Content-Length'] != obj_dict['bytes'] or \
-                    headers['Content-Type'] != obj_dict['content_type']:
-                fail_file.write('%s\n' % quote('%s/%s' % (container, obj_dict['name'])))
-
-            except Exception as err:
-                print 'ERROR OBJ PUTing 1: %s/%s: %s' % (container, obj, err)
-                failure_objs.append((container, obj))
-                to_client.reset()
-
-        finally:
-            to_queue.put(to_client)
+#    def check_object(container, obj_dict):
+#        if isinstance(container, unicode):
+#            container = container.encode('utf-8')
+#        if isinstance(obj, unicode):
+#            obj = obj.encode('utf-8')
+#        to_client = to_queue.get()
+#        try:
+#            try:
+#                status, reason, headers, contents = \
+#                    to_client.head_object(
+#                        container, obj, query={'multipart-manifest': 'get'})
+#            except Exception as err:
+#                print 'ERROR GETing %s/%s' % (container, obj)
+#                from_client.reset()
+#                return
+#            if status // 100 != 2:
+#                print 'ERROR GETing %s/%s' % (container, obj)
+#                return
+#            if headers['Etag'] != obj_dict['hash'] or \
+#                    headers['Content-Length'] != obj_dict['bytes'] or \
+#                    headers['Content-Type'] != obj_dict['content_type']:
+#                fail_file.write('%s\n' % quote('%s/%s' % (container, obj_dict['name'])))
+#
+#            except Exception as err:
+#                print 'ERROR OBJ PUTing 1: %s/%s: %s' % (container, obj, err)
+#                failure_objs.append((container, obj))
+#                to_client.reset()
+#
+#        finally:
+#            to_queue.put(to_client)
 
 
     for container in from_containers:
