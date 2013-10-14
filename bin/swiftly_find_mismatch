@@ -1,4 +1,5 @@
 #!/usr/bin/env python
+import sys
 from optparse import OptionParser
 from os import environ
 from urllib import unquote, quote
@@ -11,8 +12,7 @@ import eventlet
 eventlet.monkey_patch()
 
 
-
-num_clients = 20
+num_clients = 2
 
 if __name__ == '__main__':
     parser = OptionParser()
@@ -43,17 +43,11 @@ if __name__ == '__main__':
         '--to-region', dest='to_region', metavar='VALUE',
         help='Region to transfer the files to.')
 
-    parser.add_option(
-        '--obj-list', dest='obj_list', metavar='PATH',
-        help='Transfer objects in file.')
 
     parser.add_option(
         '--output', dest='output', metavar='PATH',
         help='Write mismatch here.')
 
-    parser.add_option(
-        '--verbose-log', dest='verbose_log',
-        help='The path to the verbose log to parse.')
 
     options, args = parser.parse_args()
     from_queue = Queue()
@@ -73,18 +67,6 @@ if __name__ == '__main__':
                             retries=6, eventlet=True))
 
     pool = GreenPool(num_clients)
-    container_errors = {}
-    obj_errors = []
-    containers = []
-    obj_manifests = []
-
-    objs_from_file = []
-    if options.obj_list:
-        obj_file = open(options.obj_list)
-        for line in obj_file:
-            objs_from_file.append(unquote(line).split('/', 1))
-
-
 
     def get_all_containers(the_queue):
         marker = None
@@ -126,7 +108,11 @@ if __name__ == '__main__':
             the_queue.put(the_client)
 
     # figure out the concurrency gets later
-    all_containers = list(get_all_containers(from_queue))
+    from_containers = set(get_all_containers(from_queue))
+    to_containers = set(get_all_containers(to_queue))
+    if from_containers != to_containers:
+        print 'missing containers: %s' % (from_containers - to_containers)
+        sys.exit(1)
 
     failure_objs = []
 
@@ -164,7 +150,7 @@ if __name__ == '__main__':
             to_queue.put(to_client)
 
 
-    for container in containers:
+    for container in from_containers:
         # figure out the concurrency gets later
         from_objs = set(get_all_objects(container, from_queue))
         to_objs = set(get_all_objects(container, to_queue))
