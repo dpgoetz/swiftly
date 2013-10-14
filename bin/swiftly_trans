@@ -13,7 +13,7 @@ eventlet.monkey_patch()
 
 obj_allowed_headers = '''Content-Encoding, Content-Disposition, X-Object-Manifest, Access-Control-Allow-Origin, Access-Control-Allow-Credentials, Access-Control-Expose-Headers, Access-Control-Max-Age, Access-Control-Allow-Methods, Access-Control-Allow-Headers, Origin, Access-Control-Request-Method, Access-Control-Request-Headers, X-Delete-At, X-Static-Large-Object, P3P'''.split()
 
-obj_allowed_headers = [i.lower().strip() for i in obj_allowed_headers]
+obj_allowed_headers = [i.lower().strip().strip(',') for i in obj_allowed_headers]
 num_clients = 20
 
 if __name__ == '__main__':
@@ -80,6 +80,7 @@ if __name__ == '__main__':
     if options.obj_list:
         obj_file = open(options.obj_list)
         for line in obj_file:
+            line = line.strip()
             objs_from_file.append(unquote(line).split('/', 1))
 
 
@@ -258,6 +259,8 @@ if __name__ == '__main__':
     pool.waitall()
 
     for i in xrange(10):
+        if not failure_objs:
+            break
         print '------------------ retrying failures ----------------- %s' % i
 
         sleep(2**i)
