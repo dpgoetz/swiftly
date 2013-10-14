@@ -1,0 +1,175 @@
+#!/usr/bin/env python
+from optparse import OptionParser
+from os import environ
+from urllib import unquote, quote
+
+from swiftly.client import Client
+from eventlet.greenpool import GreenPool
+from eventlet.queue import Queue
+from eventlet import sleep
+import eventlet
+eventlet.monkey_patch()
+
+
+
+num_clients = 20
+
+if __name__ == '__main__':
+    parser = OptionParser()
+
+    parser.add_option(
+        '-A', '--auth-url', dest='auth_url',
+        default=environ.get('SWIFTLY_AUTH_URL', ''), metavar='URL',
+        help='URL to auth system, example: '
+             'http://127.0.0.1:8080/auth/v1.0 You can also set this with '
+             'the environment variable SWIFTLY_AUTH_URL.')
+    parser.add_option(
+        '-U', '--auth-user', dest='auth_user',
+        default=environ.get('SWIFTLY_AUTH_USER', ''), metavar='USER',
+        help='User name for auth system, example: test:tester You can '
+             'also set this with the environment variable '
+             'SWIFTLY_AUTH_USER.')
+    parser.add_option(
+        '-K', '--auth-key', dest='auth_key',
+        default=environ.get('SWIFTLY_AUTH_KEY', ''), metavar='KEY',
+        help='Key for auth system, example: testing You can also set this '
+             'with the environment variable SWIFTLY_AUTH_KEY.')
+
+    parser.add_option(
+        '--from-region', dest='from_region', metavar='VALUE',
+        help='Region to transfer the files from.')
+
+    parser.add_option(
+        '--to-region', dest='to_region', metavar='VALUE',
+        help='Region to transfer the files to.')
+
+    parser.add_option(
+        '--obj-list', dest='obj_list', metavar='PATH',
+        help='Transfer objects in file.')
+
+    parser.add_option(
+        '--output', dest='output', metavar='PATH',
+        help='Write mismatch here.')
+
+    parser.add_option(
+        '--verbose-log', dest='verbose_log',
+        help='The path to the verbose log to parse.')
+
+    options, args = parser.parse_args()
+    from_queue = Queue()
+    for i in xrange(num_clients):
+        from_queue.put(Client(auth_url=options.auth_url,
+                              auth_user=options.auth_user,
+                              auth_key=options.auth_key,
+                              region=options.from_region,
+                              retries=9, eventlet=True))
+
+    to_queue = Queue()
+    for i in xrange(num_clients):
+        to_queue.put(Client(auth_url=options.auth_url,
+                            auth_user=options.auth_user,
+                            auth_key=options.auth_key,
+                            region=options.to_region,
+                            retries=6, eventlet=True))
+
+    pool = GreenPool(num_clients)
+    container_errors = {}
+    obj_errors = []
+    containers = []
+    obj_manifests = []
+
+    objs_from_file = []
+    if options.obj_list:
+        obj_file = open(options.obj_list)
+        for line in obj_file:
+            objs_from_file.append(unquote(line).split('/', 1))
+
+
+
+    def get_all_containers(the_queue):
+        marker = None
+        the_client = the_queue.get()
+        try:
+            while True:
+                some_left = False
+                status, reason, headers, contents = \
+                    the_client.get_account(marker=marker)
+                if status // 100 != 2:
+                    raise Exception('Could not get Account: %s' % marker)
+                for cont_dict in contents:
+                    some_left = True
+                    marker = cont_dict['name']
+                    yield cont_dict['name']
+                if not some_left:
+                    break
+        finally:
+            the_queue.put(the_client)
+
+    def get_all_objects(container, the_queue):
+        marker = None
+        the_client = the_queue.get()
+        try:
+            while True:
+                some_left = False
+                status, reason, headers, contents = \
+                    the_client.get_container(container, marker=marker)
+                if status // 100 != 2:
+                    print 'ERROR CONT GETing %s' % container
+                    continue
+                for obj_dict in contents:
+                    some_left = True
+                    marker = obj_dict['name']
+                    yield obj_dict['name'], obj_dict['hash'], obj_dict['bytes']
+                if not some_left:
+                    break
+        finally:
+            the_queue.put(the_client)
+
+    # figure out the concurrency gets later
+    all_containers = list(get_all_containers(from_queue))
+
+    failure_objs = []
+
+    fail_file = open(options.output, 'w')
+
+    def check_object(container, obj_dict)
+        if isinstance(container, unicode):
+            container = container.encode('utf-8')
+        if isinstance(obj, unicode):
+            obj = obj.encode('utf-8')
+        to_client = to_queue.get()
+        try:
+            try:
+                status, reason, headers, contents = \
+                    to_client.head_object(
+                        container, obj, query={'multipart-manifest': 'get'})
+            except Exception as err:
+                print 'ERROR GETing %s/%s' % (container, obj)
+                from_client.reset()
+                return
+            if status // 100 != 2:
+                print 'ERROR GETing %s/%s' % (container, obj)
+                return
+            if headers['Etag'] != obj_dict['hash'] or \
+                    headers['Content-Length'] != obj_dict['bytes'] or \
+                    headers['Content-Type'] != obj_dict['content_type']:
+                fail_file.write('%s\n' % quote('%s/%s' % (container, obj_dict['name'])))
+
+            except Exception as err:
+                print 'ERROR OBJ PUTing 1: %s/%s: %s' % (container, obj, err)
+                failure_objs.append((container, obj))
+                to_client.reset()
+
+        finally:
+            to_queue.put(to_client)
+
+
+    for container in containers:
+        # figure out the concurrency gets later
+        from_objs = set(get_all_objects(container, from_queue))
+        to_objs = set(get_all_objects(container, to_queue))
+        for obj_tup in (from_objs - to_objs):
+            fail_file.write('%s\n' % quote(obj_tup[0]))
+
+    fail_file.close()
+
