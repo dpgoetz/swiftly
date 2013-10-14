@@ -79,7 +79,7 @@ if __name__ == '__main__':
     objs_from_file = []
     if options.obj_list:
         obj_file = open(options.obj_list)
-        for line obj_file:
+        for line in obj_file:
             objs_from_file.append(unquote(line).split('/', 1))
 
 
@@ -167,8 +167,13 @@ if __name__ == '__main__':
             from_queue.put(from_client)
             to_queue.put(to_client)
 
-    # figure out the concurrency gets later
-    all_containers = list(get_all_containers(from_queue))
+    all_containers = []
+    if objs_from_file:
+        all_containers = [i.split('/', 1)[0] for i in objs_from_file]
+    else:
+        # figure out the concurrency gets later
+        all_containers = list(get_all_containers(from_queue))
+
     for container in all_containers:
         pool.spawn_n(put_container, container)
 
@@ -191,16 +196,15 @@ if __name__ == '__main__':
             except Exception as err:
                 obj_errors_append({'type': 'get_obj',
                                    'name': '%s/%s' % (container, obj)})
-                print 'ERROR GETing %s/%s' % (container, obj)
+                print 'ERROR GETing 1 %s/%s' % (container, obj)
                 from_client.reset()
                 return
             if fstatus // 100 != 2:
                 obj_errors_append({'type': 'get_obj',
                                    'name': '%s/%s' % (container, obj)})
-                print 'ERROR GETing %s/%s' % (container, obj)
+                print 'ERROR GETing 2 %s/%s' % (container, obj)
                 return
-            if skip_los and ('x-object-manifest' in fheaders or \
-                             'x-static-large-object' in fheaders):
+            if skip_los and ('x-static-large-object' in fheaders):
                 # do these at the end in case its a slo and segments need to
                 # be there first
                 obj_manifests.append((container, obj))
