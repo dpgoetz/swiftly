@@ -1,5 +1,4 @@
 #!/usr/bin/env python
-
 from optparse import OptionParser
 from os import environ
 
@@ -68,7 +67,7 @@ if __name__ == '__main__':
 
     pool = GreenPool(num_clients)
     container_errors = {}
-    obj_errors = {}
+    obj_errors = []
     containers = []
     obj_manifests = []
 
@@ -175,6 +174,7 @@ if __name__ == '__main__':
                 obj_errors_append({'type': 'get_obj',
                                    'name': '%s/%s' % (container, obj)})
                 print 'ERROR GETing %s/%s' % (container, obj)
+                from_client.reset()
                 return
             if fstatus // 100 != 2:
                 obj_errors_append({'type': 'get_obj',
@@ -210,6 +210,7 @@ if __name__ == '__main__':
             except Exception as err:
                 print 'ERROR OBJ PUTing 1: %s/%s: %s' % (container, obj, err)
                 failure_objs.append((container, obj))
+                to_client.reset()
 
         finally:
             from_queue.put(from_client)
