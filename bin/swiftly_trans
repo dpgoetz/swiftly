@@ -45,6 +45,10 @@ if __name__ == '__main__':
         help='Region to transfer the files to.')
 
     parser.add_option(
+        '--obj-list', dest='obj_list', metavar='PATH',
+        help='Transfer objects in file.')
+
+    parser.add_option(
         '--verbose-log', dest='verbose_log',
         help='The path to the verbose log to parse.')
 
@@ -81,14 +85,14 @@ if __name__ == '__main__':
         if len(obj_errors) > 10000:
             raise Exception('Giving up from obj errors')
 
-    def get_all_containers():
+    def get_all_containers(the_queue):
         marker = None
-        from_client = from_queue.get()
+        the_client = the_queue.get()
         try:
             while True:
                 some_left = False
                 status, reason, headers, contents = \
-                    from_client.get_account(marker=marker)
+                    the_client.get_account(marker=marker)
                 if status // 100 != 2:
                     raise Exception('Could not get Account: %s' % marker)
                 for cont_dict in contents:
@@ -98,16 +102,16 @@ if __name__ == '__main__':
                 if not some_left:
                     break
         finally:
-            from_queue.put(from_client)
+            the_queue.put(the_client)
 
-    def get_all_objects(container):
+    def get_all_objects(container, the_queue):
         marker = None
-        from_client = from_queue.get()
+        the_client = the_queue.get()
         try:
             while True:
                 some_left = False
                 status, reason, headers, contents = \
-                    from_client.get_container(container, marker=marker)
+                    the_client.get_container(container, marker=marker)
                 if status // 100 != 2:
                     print 'ERROR CONT GETing %s' % container
                     container_errors_append(
@@ -121,7 +125,7 @@ if __name__ == '__main__':
                 if not some_left:
                     break
         finally:
-            from_queue.put(from_client)
+            the_queue.put(the_client)
 
     def put_container(container):
         if isinstance(container, unicode):
@@ -156,7 +160,7 @@ if __name__ == '__main__':
             to_queue.put(to_client)
 
     # figure out the concurrency gets later
-    all_containers = list(get_all_containers())
+    all_containers = list(get_all_containers(from_queue))
     for container in all_containers:
         pool.spawn_n(put_container, container)
 
@@ -197,7 +201,7 @@ if __name__ == '__main__':
 
             for hkey, hval in fheaders.iteritems():
                 if hkey.lower().startswith('x-object-meta') or \
-                        hkey in obj_allowed_headers:
+                        hkey.lower() in obj_allowed_headers:
                     put_headers[hkey] = hval
 
             try:
@@ -225,7 +229,7 @@ if __name__ == '__main__':
 
     for container in containers:
         # figure out the concurrency gets later
-        all_objs = list(get_all_objects(container))
+        all_objs = list(get_all_objects(container, from_queue))
         for obj in all_objs:
             pool.spawn_n(put_object, container, obj)
 
@@ -236,5 +240,12 @@ if __name__ == '__main__':
 
     pool.waitall()
 
-    for container, obj in failure_objs:
-        put_object(container, obj, False)
+    for i in xrange(10):
+        print '------------------ retrying failures ----------------- %s' % i
+
+        sleep(2**i)
+        cur_failed_objs = list(failure_objs)
+        failure_objs = []
+
+        for container, obj in cur_failure_objs:
+            pool.spawn_n(put_object, container, obj, False)
