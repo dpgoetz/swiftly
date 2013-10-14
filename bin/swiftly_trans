@@ -217,6 +217,7 @@ if __name__ == '__main__':
                 print 'ERROR OBJ PUTing 1: %s/%s: %s' % (container, obj, err)
                 failure_objs.append((container, obj))
                 to_client.reset()
+                from_client.reset()
 
         finally:
             from_queue.put(from_client)
