@@ -198,6 +198,7 @@ if __name__ == '__main__':
                 obj_errors_append({'type': 'get_obj',
                                    'name': '%s/%s' % (container, obj)})
                 print 'ERROR GETing 1 %s/%s' % (container, obj)
+                failure_objs.append((container, obj))
                 from_client.reset()
                 return
             if fstatus // 100 != 2:
@@ -230,6 +231,9 @@ if __name__ == '__main__':
                     failure_objs.append((container, obj))
                     return
                 else:
+                    if (container, obj) in failure_objs:
+                        failure_objs.pop(failure_objs.index((container, obj)))
+
                     print 'OBJ PUT: %s/%s' % (container, obj)
             except Exception as err:
                 print 'ERROR OBJ PUTing 1: %s/%s: %s' % (container, obj, err)
@@ -264,9 +268,6 @@ if __name__ == '__main__':
         print '------------------ retrying failures ----------------- %s' % i
 
         sleep(2**i)
-        cur_failed_objs = list(failure_objs)
-        for i in xrange(len(failure_objs)):
-            failure_objs.pop()
 
-        for container, obj in cur_failed_objs:
+        for container, obj in failure_objs:
             pool.spawn_n(put_object, container, obj, False)
