@@ -202,7 +202,8 @@ if __name__ == '__main__':
             if fstatus // 100 != 2:
                 obj_errors_append({'type': 'get_obj',
                                    'name': '%s/%s' % (container, obj)})
-                print 'ERROR GETing 2 %s/%s' % (container, obj)
+                print 'ERROR GETing 2 %s: %s/%s' % (fstatus, container, obj)
+                failure_objs.append((container, obj))
                 return
             if skip_los and ('x-static-large-object' in fheaders):
                 # do these at the end in case its a slo and segments need to
