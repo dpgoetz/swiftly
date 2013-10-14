@@ -170,7 +170,7 @@ if __name__ == '__main__':
 
     all_containers = []
     if objs_from_file:
-        all_containers = [i[0] for i in objs_from_file]
+        all_containers = list(set([i[0] for i in objs_from_file]))
     else:
         # figure out the concurrency gets later
         all_containers = list(get_all_containers(from_queue))
@@ -227,7 +227,7 @@ if __name__ == '__main__':
                 if pstatus // 100 != 2:
                     obj_errors_append({'type': 'put_obj',
                                        'name': '%s/%s' % (container, obj)})
-                    print 'ERROR OBJ PUTing 2: %s/%s: %s' % (container, obj, pstatus)
+                    print 'ERROR OBJ PUTing 2: %s/%s : %s' % (container, obj, pstatus)
                     failure_objs.add((container, obj))
                     return
                 else:
@@ -235,7 +235,7 @@ if __name__ == '__main__':
 
                     print 'OBJ PUT: %s/%s' % (container, obj)
             except Exception as err:
-                print 'ERROR OBJ PUTing 1: %s/%s: %s' % (container, obj, err)
+                print 'ERROR OBJ PUTing 1: %s/%s : %s' % (container, obj, err)
                 failure_objs.add((container, obj))
                 to_client.reset()
                 from_client.reset()
@@ -268,5 +268,6 @@ if __name__ == '__main__':
 
         sleep(2**i)
 
-        for container, obj in failure_objs:
+        cur_objs = list(failure_objs)
+        for container, obj in cur_objs:
             pool.spawn_n(put_object, container, obj, False)
