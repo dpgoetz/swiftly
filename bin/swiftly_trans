@@ -78,7 +78,7 @@ if __name__ == '__main__':
 
     objs_from_file = []
     if options.obj_list:
-        obj_file = options.obj_list.open()
+        obj_file = open(options.obj_list)
         for line obj_file:
             objs_from_file.append(unquote(line).split('/', 1))
 
