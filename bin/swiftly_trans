@@ -180,7 +180,7 @@ if __name__ == '__main__':
 
     pool.waitall()
 
-    failure_objs = []
+    failure_objs = set([])
 
     def put_object(container, obj, skip_los=True):
         if isinstance(container, unicode):
@@ -198,14 +198,14 @@ if __name__ == '__main__':
                 obj_errors_append({'type': 'get_obj',
                                    'name': '%s/%s' % (container, obj)})
                 print 'ERROR GETing 1 %s/%s' % (container, obj)
-                failure_objs.append((container, obj))
+                failure_objs.add((container, obj))
                 from_client.reset()
                 return
             if fstatus // 100 != 2:
                 obj_errors_append({'type': 'get_obj',
                                    'name': '%s/%s' % (container, obj)})
                 print 'ERROR GETing 2 %s: %s/%s' % (fstatus, container, obj)
-                failure_objs.append((container, obj))
+                failure_objs.add((container, obj))
                 return
             if skip_los and ('x-static-large-object' in fheaders):
                 # do these at the end in case its a slo and segments need to
@@ -228,16 +228,15 @@ if __name__ == '__main__':
                     obj_errors_append({'type': 'put_obj',
                                        'name': '%s/%s' % (container, obj)})
                     print 'ERROR OBJ PUTing 2: %s/%s: %s' % (container, obj, pstatus)
-                    failure_objs.append((container, obj))
+                    failure_objs.add((container, obj))
                     return
                 else:
-                    if (container, obj) in failure_objs:
-                        failure_objs.pop(failure_objs.index((container, obj)))
+                    failure_objs.discard((container, obj))
 
                     print 'OBJ PUT: %s/%s' % (container, obj)
             except Exception as err:
                 print 'ERROR OBJ PUTing 1: %s/%s: %s' % (container, obj, err)
-                failure_objs.append((container, obj))
+                failure_objs.add((container, obj))
                 to_client.reset()
                 from_client.reset()
 
