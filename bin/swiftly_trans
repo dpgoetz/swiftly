@@ -167,9 +167,15 @@ if __name__ == '__main__':
         from_client = from_queue.get()
         to_client = to_queue.get()
         try:
-            fstatus, freason, fheaders, fcontents = \
-                from_client.get_object(
-                    container, obj, query={'multipart-manifest': 'get'})
+            try:
+                fstatus, freason, fheaders, fcontents = \
+                    from_client.get_object(
+                        container, obj, query={'multipart-manifest': 'get'})
+            except Exception as err:
+                obj_errors_append({'type': 'get_obj',
+                                   'name': '%s/%s' % (container, obj)})
+                print 'ERROR GETing %s/%s' % (container, obj)
+                return
             if fstatus // 100 != 2:
                 obj_errors_append({'type': 'get_obj',
                                    'name': '%s/%s' % (container, obj)})
