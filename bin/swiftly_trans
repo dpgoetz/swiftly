@@ -11,7 +11,7 @@ import eventlet
 eventlet.monkey_patch()
 
 
-obj_allowed_headers = '''Content-Type, Etag, Content-Encoding, Content-Disposition, X-Object-Manifest, Access-Control-Allow-Origin, Access-Control-Allow-Credentials, Access-Control-Expose-Headers, Access-Control-Max-Age, Access-Control-Allow-Methods, Access-Control-Allow-Headers, Origin, Access-Control-Request-Method, Access-Control-Request-Headers, X-Delete-At, X-Static-Large-Object, P3P'''.split()
+obj_allowed_headers = '''Content-Type, Etag, Content-Encoding, Content-Disposition, X-Object-Manifest, Access-Control-Allow-Origin, Access-Control-Allow-Credentials, Access-Control-Expose-Headers, Access-Control-Max-Age, Access-Control-Allow-Methods, Access-Control-Allow-Headers, Origin, Access-Control-Request-Method, Access-Control-Request-Headers, X-Delete-At, X-Static-Large-Object, P3P, X-Timestamp'''.split()
 
 obj_allowed_headers = [i.lower().strip().strip(',') for i in obj_allowed_headers]
 num_clients = 30
